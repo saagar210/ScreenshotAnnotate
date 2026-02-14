@@ -1,13 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { AnnotationCanvas, type AnnotationCanvasRef } from './components/AnnotationCanvas';
 import { Toolbar } from './components/Toolbar';
 import { HistoryGallery } from './components/HistoryGallery';
+import { RedactionPreview } from './components/RedactionPreview';
 import { useCapture } from './hooks/useCapture';
 import { useAnnotations } from './hooks/useAnnotations';
 import { useExport } from './hooks/useExport';
 import { useHistory } from './hooks/useHistory';
-import type { AppMode, AnnotationTool, CaptureResult } from './types';
+import { useOCR } from './hooks/useOCR';
+import type { AppMode, AnnotationTool, CaptureResult, RedactAnnotation } from './types';
+import type { PiiRegion } from './hooks/useOCR';
 import './App.css';
 
 function App() {
@@ -17,6 +21,9 @@ function App() {
   const [currentColor, setCurrentColor] = useState('#FF0000');
   const [currentThickness, setCurrentThickness] = useState(3);
   const [saving, setSaving] = useState(false);
+  const [showRedactionPreview, setShowRedactionPreview] = useState(false);
+  const [detectedPiiRegions, setDetectedPiiRegions] = useState<PiiRegion[]>([]);
+  const [manualRedactions, setManualRedactions] = useState<RedactAnnotation[]>([]);
 
   const canvasRef = useRef<AnnotationCanvasRef>(null);
 
@@ -32,6 +39,7 @@ function App() {
   } = useAnnotations();
   const { exportAnnotations } = useExport();
   const { saveToHistory } = useHistory();
+  const { detectPii, isProcessing: isOcrProcessing } = useOCR();
 
   // Listen for global hotkey trigger
   useEffect(() => {
@@ -103,6 +111,68 @@ function App() {
     setMode('idle');
     setCurrentImage(null);
     clear();
+    setShowRedactionPreview(false);
+    setDetectedPiiRegions([]);
+    setManualRedactions([]);
+  };
+
+  const handleCheckPii = async () => {
+    if (!currentImage) return;
+
+    // Convert file path to data URL for OCR
+    const imageUrl = convertFileSrc(currentImage.tempPath);
+
+    // Load image as data URL
+    const img = new Image();
+    img.src = imageUrl;
+    await new Promise((resolve) => {
+      img.onload = resolve;
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = currentImage.width;
+    canvas.height = currentImage.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      alert('Failed to create canvas context');
+      return;
+    }
+
+    ctx.drawImage(img, 0, 0);
+    const dataUrl = canvas.toDataURL('image/png');
+
+    // Run OCR
+    const result = await detectPii(dataUrl);
+    if (result) {
+      if (result.timedOut) {
+        alert('OCR timed out. You can still add manual redactions.');
+      }
+      setDetectedPiiRegions(result.regions);
+      setShowRedactionPreview(true);
+    } else {
+      alert('OCR failed. You can still add manual redactions.');
+      setShowRedactionPreview(true);
+    }
+  };
+
+  const handleApplyRedactions = (redactions: RedactAnnotation[]) => {
+    // Add all redaction annotations
+    redactions.forEach(redaction => addAnnotation(redaction));
+    setShowRedactionPreview(false);
+    setDetectedPiiRegions([]);
+    setManualRedactions([]);
+  };
+
+  const handleCancelRedactions = () => {
+    setShowRedactionPreview(false);
+    setDetectedPiiRegions([]);
+    setManualRedactions([]);
+  };
+
+  const handleAddManualRedaction = () => {
+    // Switch to redact tool and close preview
+    setCurrentTool('redact');
+    setShowRedactionPreview(false);
   };
 
   // Keyboard shortcuts for tool switching
@@ -195,8 +265,10 @@ function App() {
           onRedo={redo}
           onSave={handleSave}
           onCancel={handleCancel}
+          onCheckPii={handleCheckPii}
           canUndo={canUndo}
           canRedo={canRedo}
+          isOcrProcessing={isOcrProcessing}
         />
         <AnnotationCanvas
           ref={canvasRef}
@@ -213,6 +285,19 @@ function App() {
           onSave={handleSave}
           onCancel={handleCancel}
         />
+        {showRedactionPreview && (
+          <div className="redaction-preview-overlay">
+            <RedactionPreview
+              imageWidth={currentImage.width}
+              imageHeight={currentImage.height}
+              detectedRegions={detectedPiiRegions}
+              manualRedactions={manualRedactions}
+              onApply={handleApplyRedactions}
+              onCancel={handleCancelRedactions}
+              onAddManual={handleAddManualRedaction}
+            />
+          </div>
+        )}
         {saving && (
           <div className="saving-overlay">
             <div className="saving-spinner">Saving...</div>

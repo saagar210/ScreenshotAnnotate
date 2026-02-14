@@ -49,6 +49,8 @@ export interface RedactAnnotation extends BaseAnnotation {
   reason: 'email' | 'phone' | 'ip' | 'credit_card' | 'manual';
 }
 
+export type RedactionStyle = 'blur' | 'pixelate' | 'blackbox';
+
 export type Annotation = ArrowAnnotation | RectAnnotation | TextAnnotation
                 | FreehandAnnotation | RedactAnnotation;
 

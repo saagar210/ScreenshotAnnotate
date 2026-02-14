@@ -8,6 +8,7 @@ import type {
   RectAnnotation,
   TextAnnotation,
   FreehandAnnotation,
+  RedactAnnotation,
 } from '../types';
 
 interface AnnotationCanvasProps {
@@ -120,6 +121,18 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasRef, AnnotationCanvas
           thickness: currentThickness,
         });
         break;
+      case 'redact':
+        setCurrentDraft({
+          type: 'redact',
+          origin: point,
+          width: 0,
+          height: 0,
+          style: 'blur',
+          reason: 'manual',
+          color: currentColor,
+          thickness: 0,
+        });
+        break;
     }
   };
 
@@ -132,8 +145,9 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasRef, AnnotationCanvas
       case 'arrow':
         setCurrentDraft({ ...currentDraft, end: point });
         break;
-      case 'rectangle': {
-        const origin = (currentDraft as Partial<RectAnnotation>).origin!;
+      case 'rectangle':
+      case 'redact': {
+        const origin = (currentDraft as Partial<RectAnnotation | RedactAnnotation>).origin!;
         setCurrentDraft({
           ...currentDraft,
           width: point.x - origin.x,
@@ -261,6 +275,13 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasRef, AnnotationCanvas
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
         >
+          {/* SVG Filters for redaction effects */}
+          <defs>
+            <filter id="blur-filter">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="10" />
+            </filter>
+          </defs>
+
           {/* Render finalized annotations */}
           {annotations.map(annotation => (
             <AnnotationRenderer key={annotation.id} annotation={annotation} />
@@ -397,6 +418,64 @@ function AnnotationRenderer({
           opacity={opacity}
         />
       );
+    }
+
+    case 'redact': {
+      const redact = annotation as RedactAnnotation;
+
+      switch (redact.style) {
+        case 'blur':
+          return (
+            <rect
+              x={redact.origin.x}
+              y={redact.origin.y}
+              width={redact.width}
+              height={redact.height}
+              fill="white"
+              filter="url(#blur-filter)"
+              opacity={opacity}
+            />
+          );
+
+        case 'pixelate':
+          // Pixelation effect using a small scaled-up pattern
+          return (
+            <g opacity={opacity}>
+              <defs>
+                <pattern
+                  id={`pixelate-${redact.id}`}
+                  x={redact.origin.x}
+                  y={redact.origin.y}
+                  width="8"
+                  height="8"
+                  patternUnits="userSpaceOnUse"
+                >
+                  <rect width="8" height="8" fill="#999" />
+                </pattern>
+              </defs>
+              <rect
+                x={redact.origin.x}
+                y={redact.origin.y}
+                width={redact.width}
+                height={redact.height}
+                fill={`url(#pixelate-${redact.id})`}
+              />
+            </g>
+          );
+
+        case 'blackbox':
+          return (
+            <rect
+              x={redact.origin.x}
+              y={redact.origin.y}
+              width={redact.width}
+              height={redact.height}
+              fill="#000000"
+              opacity={opacity}
+            />
+          );
+      }
+      break;
     }
 
     default:

@@ -11,8 +11,10 @@ interface ToolbarProps {
   onRedo: () => void;
   onSave: () => void;
   onCancel: () => void;
+  onCheckPii: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  isOcrProcessing: boolean;
 }
 
 const COLOR_PRESETS = [
@@ -33,8 +35,10 @@ export function Toolbar({
   onRedo,
   onSave,
   onCancel,
+  onCheckPii,
   canUndo,
   canRedo,
+  isOcrProcessing,
 }: ToolbarProps) {
   return (
     <div className="toolbar">
@@ -68,6 +72,13 @@ export function Toolbar({
             title="Freehand (F)"
           >
             ✎ Freehand
+          </button>
+          <button
+            className={currentTool === 'redact' ? 'active' : ''}
+            onClick={() => onToolChange('redact')}
+            title="Redact"
+          >
+            ▓ Redact
           </button>
         </div>
       </div>
@@ -112,6 +123,17 @@ export function Toolbar({
         </button>
         <button onClick={onRedo} disabled={!canRedo} title="Redo (Cmd+Shift+Z)">
           ↷ Redo
+        </button>
+      </div>
+
+      <div className="toolbar-section toolbar-actions">
+        <button
+          className="btn-secondary"
+          onClick={onCheckPii}
+          disabled={isOcrProcessing}
+          title="Check for PII"
+        >
+          {isOcrProcessing ? '🔍 Checking...' : '🔍 Check for PII'}
         </button>
       </div>
 
