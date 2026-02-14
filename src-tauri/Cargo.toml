@@ -29,4 +29,7 @@ uuid = { version = "1.0", features = ["v4"] }
 dirs = "5.0"
 reqwest = { version = "0.12", features = ["json", "multipart", "blocking"] }
 keyring = "3.6"
+base64 = "0.22"
+chrono = "0.4"
+futures = "0.3"
 

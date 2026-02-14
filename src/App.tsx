@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { AnnotationCanvas } from './components/AnnotationCanvas';
+import { AnnotationCanvas, type AnnotationCanvasRef } from './components/AnnotationCanvas';
 import { Toolbar } from './components/Toolbar';
+import { HistoryGallery } from './components/HistoryGallery';
 import { useCapture } from './hooks/useCapture';
 import { useAnnotations } from './hooks/useAnnotations';
+import { useExport } from './hooks/useExport';
+import { useHistory } from './hooks/useHistory';
 import type { AppMode, AnnotationTool, CaptureResult } from './types';
 import './App.css';
 
@@ -13,6 +16,9 @@ function App() {
   const [currentTool, setCurrentTool] = useState<AnnotationTool>('arrow');
   const [currentColor, setCurrentColor] = useState('#FF0000');
   const [currentThickness, setCurrentThickness] = useState(3);
+  const [saving, setSaving] = useState(false);
+
+  const canvasRef = useRef<AnnotationCanvasRef>(null);
 
   const { captureScreenshot, isCapturing, error } = useCapture();
   const {
@@ -24,6 +30,8 @@ function App() {
     canUndo,
     canRedo,
   } = useAnnotations();
+  const { exportAnnotations } = useExport();
+  const { saveToHistory } = useHistory();
 
   // Listen for global hotkey trigger
   useEffect(() => {
@@ -45,11 +53,50 @@ function App() {
     }
   };
 
-  const handleSave = () => {
-    // For Phase 0, just log the annotations
-    console.log('Saving annotations:', annotations);
-    alert('Screenshot captured! (Export functionality coming in Phase 2)');
-    handleCancel();
+  const handleSave = async () => {
+    if (!currentImage || !canvasRef.current) {
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const svgElement = canvasRef.current.getSvgElement();
+      if (!svgElement) {
+        alert('Failed to get canvas element');
+        setSaving(false);
+        return;
+      }
+
+      // Export annotations to PNG
+      const exportResult = await exportAnnotations(svgElement, currentImage.tempPath);
+      if (!exportResult) {
+        alert('Failed to export annotations');
+        setSaving(false);
+        return;
+      }
+
+      // Save to history
+      const annotationsJson = JSON.stringify(annotations);
+      const screenshotId = await saveToHistory(
+        currentImage.tempPath,
+        exportResult.annotatedPath,
+        exportResult.thumbnailPath,
+        annotationsJson,
+      );
+
+      if (screenshotId) {
+        alert('Screenshot saved to history!');
+        handleCancel();
+      } else {
+        alert('Failed to save to history');
+      }
+    } catch (err) {
+      console.error('Save error:', err);
+      alert(`Failed to save: ${err}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -95,14 +142,22 @@ function App() {
         <div className="idle-screen">
           <h1>Screenshot Annotate</h1>
           <p>Press <kbd>⌘ Cmd</kbd> + <kbd>⇧ Shift</kbd> + <kbd>5</kbd> to capture a screenshot</p>
-          <p>Or click the button below:</p>
-          <button
-            className="btn-primary capture-btn"
-            onClick={handleCapture}
-            disabled={isCapturing}
-          >
-            {isCapturing ? 'Capturing...' : 'Capture Screenshot'}
-          </button>
+          <p>Or click the buttons below:</p>
+          <div className="idle-buttons">
+            <button
+              className="btn-primary capture-btn"
+              onClick={handleCapture}
+              disabled={isCapturing}
+            >
+              {isCapturing ? 'Capturing...' : 'Capture Screenshot'}
+            </button>
+            <button
+              className="btn-secondary"
+              onClick={() => setMode('history')}
+            >
+              View History
+            </button>
+          </div>
           {error && (
             <div className="error-message">
               <p>Error: {error}</p>
@@ -114,6 +169,14 @@ function App() {
             </div>
           )}
         </div>
+      </div>
+    );
+  }
+
+  if (mode === 'history') {
+    return (
+      <div className="app-container">
+        <HistoryGallery onClose={() => setMode('idle')} />
       </div>
     );
   }
@@ -136,6 +199,7 @@ function App() {
           canRedo={canRedo}
         />
         <AnnotationCanvas
+          ref={canvasRef}
           imagePath={currentImage.tempPath}
           imageWidth={currentImage.width}
           imageHeight={currentImage.height}
@@ -149,6 +213,11 @@ function App() {
           onSave={handleSave}
           onCancel={handleCancel}
         />
+        {saving && (
+          <div className="saving-overlay">
+            <div className="saving-spinner">Saving...</div>
+          </div>
+        )}
       </div>
     );
   }

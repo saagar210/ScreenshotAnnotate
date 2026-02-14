@@ -60,9 +60,36 @@ export interface CaptureResult {
   height: number;
 }
 
+// === Export Types ===
+
+export interface ExportResult {
+  annotatedPath: string;
+  thumbnailPath: string;
+}
+
+// === History Types ===
+
+export interface ScreenshotMeta {
+  id: string;
+  originalPath: string;
+  annotatedPath: string | null;
+  thumbnailPath: string;
+  createdAt: string;
+  ticketId: string | null;
+  uploadedUrl: string | null;
+  sizeBytes: number;
+  annotationCount: number;
+}
+
+export interface StorageUsage {
+  usedBytes: number;
+  budgetBytes: number;
+  itemCount: number;
+}
+
 // === App State ===
 
-export type AppMode = 'idle' | 'annotating';
+export type AppMode = 'idle' | 'annotating' | 'history';
 
 export interface AppState {
   mode: AppMode;

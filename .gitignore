@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Rust
+src-tauri/target
+Cargo.lock
+
+# Tauri
+src-tauri/WixTools

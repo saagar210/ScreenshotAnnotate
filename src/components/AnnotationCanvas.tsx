@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import type {
   Annotation,
@@ -25,21 +25,34 @@ interface AnnotationCanvasProps {
   onCancel: () => void;
 }
 
-export function AnnotationCanvas({
-  imagePath,
-  imageWidth,
-  imageHeight,
-  annotations,
-  currentTool,
-  currentColor,
-  currentThickness,
-  onAddAnnotation,
-  onUndo,
-  onRedo,
-  onSave,
-  onCancel,
-}: AnnotationCanvasProps) {
-  const svgRef = useRef<SVGSVGElement>(null);
+export interface AnnotationCanvasRef {
+  getSvgElement: () => SVGSVGElement | null;
+}
+
+export const AnnotationCanvas = forwardRef<AnnotationCanvasRef, AnnotationCanvasProps>(
+  function AnnotationCanvas(
+    {
+      imagePath,
+      imageWidth,
+      imageHeight,
+      annotations,
+      currentTool,
+      currentColor,
+      currentThickness,
+      onAddAnnotation,
+      onUndo,
+      onRedo,
+      onSave,
+      onCancel,
+    },
+    ref,
+  ) {
+    const svgRef = useRef<SVGSVGElement>(null);
+
+    // Expose SVG element to parent via ref
+    useImperativeHandle(ref, () => ({
+      getSvgElement: () => svgRef.current,
+    }));
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentDraft, setCurrentDraft] = useState<Partial<Annotation> | null>(null);
   const [textInput, setTextInput] = useState<{ position: Point; visible: boolean }>({
@@ -283,7 +296,7 @@ export function AnnotationCanvas({
       </div>
     </div>
   );
-}
+});
 
 function AnnotationRenderer({
   annotation,

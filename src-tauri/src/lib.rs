@@ -1,6 +1,8 @@
 mod capture;
+mod export;
+mod history;
 
-use tauri::{Emitter, Manager};
+use tauri::Emitter;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -31,6 +33,11 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             capture::capture_screenshot,
+            export::export_annotated,
+            history::save_to_history,
+            history::get_history,
+            history::delete_from_history,
+            history::get_storage_usage,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
