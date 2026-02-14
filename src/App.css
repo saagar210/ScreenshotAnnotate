@@ -1,0 +1,253 @@
+:root {
+  --primary-color: #2979FF;
+  --secondary-color: #6c757d;
+  --success-color: #00C853;
+  --danger-color: #FF0000;
+  --bg-color: #ffffff;
+  --surface-color: #f5f5f5;
+  --text-color: #212121;
+  --border-color: #e0e0e0;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.app-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+}
+
+/* Idle Screen */
+.idle-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 2rem;
+  text-align: center;
+}
+
+.idle-screen h1 {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.idle-screen p {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+  color: #666;
+}
+
+.idle-screen kbd {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.9rem;
+  font-family: monospace;
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.capture-btn {
+  margin-top: 2rem;
+  font-size: 1.2rem;
+  padding: 1rem 2rem;
+}
+
+.error-message {
+  margin-top: 2rem;
+  padding: 1rem;
+  background-color: #ffebee;
+  border: 1px solid #ef5350;
+  border-radius: 8px;
+  color: #c62828;
+}
+
+/* Toolbar */
+.toolbar {
+  width: 280px;
+  height: 100vh;
+  background-color: var(--surface-color);
+  border-right: 1px solid var(--border-color);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  overflow-y: auto;
+}
+
+.toolbar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.toolbar-section h3 {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  color: #666;
+  margin-bottom: 0.25rem;
+}
+
+.tool-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tool-buttons button {
+  padding: 0.75rem;
+  text-align: left;
+  border: 1px solid var(--border-color);
+  background-color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tool-buttons button:hover {
+  background-color: #f0f0f0;
+}
+
+.tool-buttons button.active {
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.color-presets {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.color-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.color-btn:hover {
+  transform: scale(1.1);
+}
+
+.color-btn.active {
+  border-color: #000;
+  box-shadow: 0 0 0 2px white, 0 0 0 4px #000;
+}
+
+input[type="color"] {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+input[type="range"] {
+  width: 100%;
+}
+
+.toolbar-actions {
+  margin-top: auto;
+}
+
+.toolbar-actions button {
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+
+/* Buttons */
+button {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: white;
+  color: var(--text-color);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+button:hover:not(:disabled) {
+  background-color: var(--surface-color);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #1565c0;
+}
+
+.btn-secondary {
+  background-color: var(--secondary-color);
+  color: white;
+  border-color: var(--secondary-color);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #5a6268;
+}
+
+/* Annotation Canvas */
+.annotation-canvas-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 2rem;
+  background-color: #2a2a2a;
+}
+
+.canvas-wrapper {
+  position: relative;
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .toolbar {
+    width: 100%;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .app-container {
+    flex-direction: column;
+  }
+}
