@@ -5,6 +5,8 @@ import { AnnotationCanvas, type AnnotationCanvasRef } from './components/Annotat
 import { Toolbar } from './components/Toolbar';
 import { HistoryGallery } from './components/HistoryGallery';
 import { RedactionPreview } from './components/RedactionPreview';
+import { UploadWizard } from './components/UploadWizard';
+import { SettingsPanel } from './components/SettingsPanel';
 import { useCapture } from './hooks/useCapture';
 import { useAnnotations } from './hooks/useAnnotations';
 import { useExport } from './hooks/useExport';
@@ -24,6 +26,9 @@ function App() {
   const [showRedactionPreview, setShowRedactionPreview] = useState(false);
   const [detectedPiiRegions, setDetectedPiiRegions] = useState<PiiRegion[]>([]);
   const [manualRedactions, setManualRedactions] = useState<RedactAnnotation[]>([]);
+  const [showUploadWizard, setShowUploadWizard] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [savedFilePath, setSavedFilePath] = useState<string | null>(null);
 
   const canvasRef = useRef<AnnotationCanvasRef>(null);
 
@@ -94,8 +99,9 @@ function App() {
       );
 
       if (screenshotId) {
-        alert('Screenshot saved to history!');
-        handleCancel();
+        setSavedFilePath(exportResult.annotatedPath);
+        alert('Screenshot saved! Upload to a ticket?');
+        setShowUploadWizard(true);
       } else {
         alert('Failed to save to history');
       }
@@ -175,6 +181,12 @@ function App() {
     setShowRedactionPreview(false);
   };
 
+  const handleUploadSuccess = (ticketUrl: string) => {
+    console.log('Upload successful:', ticketUrl);
+    setShowUploadWizard(false);
+    handleCancel(); // Return to idle mode
+  };
+
   // Keyboard shortcuts for tool switching
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -227,6 +239,12 @@ function App() {
             >
               View History
             </button>
+            <button
+              className="btn-secondary"
+              onClick={() => setShowSettings(true)}
+            >
+              Settings
+            </button>
           </div>
           {error && (
             <div className="error-message">
@@ -239,6 +257,12 @@ function App() {
             </div>
           )}
         </div>
+        {showSettings && (
+          <>
+            <div className="settings-panel-overlay" onClick={() => setShowSettings(false)} />
+            <SettingsPanel onClose={() => setShowSettings(false)} />
+          </>
+        )}
       </div>
     );
   }
@@ -302,6 +326,22 @@ function App() {
           <div className="saving-overlay">
             <div className="saving-spinner">Saving...</div>
           </div>
+        )}
+        {showUploadWizard && savedFilePath && (
+          <>
+            <div className="upload-wizard-overlay" onClick={() => setShowUploadWizard(false)} />
+            <UploadWizard
+              filePath={savedFilePath}
+              onClose={() => setShowUploadWizard(false)}
+              onSuccess={handleUploadSuccess}
+            />
+          </>
+        )}
+        {showSettings && (
+          <>
+            <div className="settings-panel-overlay" onClick={() => setShowSettings(false)} />
+            <SettingsPanel onClose={() => setShowSettings(false)} />
+          </>
         )}
       </div>
     );

@@ -1,6 +1,8 @@
 mod capture;
+mod credentials;
 mod export;
 mod history;
+mod upload;
 
 use tauri::Emitter;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
@@ -11,6 +13,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             // Register the global shortcut (Cmd+Shift+5)
             // This will emit an event when triggered
@@ -38,6 +41,11 @@ pub fn run() {
             history::get_history,
             history::delete_from_history,
             history::get_storage_usage,
+            credentials::store_credential,
+            credentials::get_credential,
+            credentials::delete_credential,
+            upload::upload_screenshot,
+            upload::validate_credentials,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
