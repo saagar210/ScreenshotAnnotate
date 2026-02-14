@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import type { AnnotationTool } from '../types';
+import { TEMPLATES, type Template } from '../lib/templates';
+import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp';
 
 interface ToolbarProps {
   currentTool: AnnotationTool;
@@ -12,6 +15,7 @@ interface ToolbarProps {
   onSave: () => void;
   onCancel: () => void;
   onCheckPii: () => void;
+  onApplyTemplate: (template: Template) => void;
   canUndo: boolean;
   canRedo: boolean;
   isOcrProcessing: boolean;
@@ -36,11 +40,15 @@ export function Toolbar({
   onSave,
   onCancel,
   onCheckPii,
+  onApplyTemplate,
   canUndo,
   canRedo,
   isOcrProcessing,
 }: ToolbarProps) {
+  const [showShortcuts, setShowShortcuts] = useState(false);
+
   return (
+    <>
     <div className="toolbar">
       <div className="toolbar-section">
         <h3>Tools</h3>
@@ -81,6 +89,30 @@ export function Toolbar({
             ▓ Redact
           </button>
         </div>
+      </div>
+
+      <div className="toolbar-section">
+        <h3>Templates</h3>
+        <select
+          className="template-selector"
+          onChange={(e) => {
+            const template = TEMPLATES.find(t => t.id === e.target.value);
+            if (template) {
+              onApplyTemplate(template);
+              e.target.value = ''; // Reset selection
+            }
+          }}
+          defaultValue=""
+        >
+          <option value="" disabled>
+            Apply Template...
+          </option>
+          {TEMPLATES.map((template) => (
+            <option key={template.id} value={template.id}>
+              {template.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="toolbar-section">
@@ -145,6 +177,19 @@ export function Toolbar({
           Cancel
         </button>
       </div>
+
+      <div className="toolbar-section">
+        <button
+          className="btn-secondary help-btn"
+          onClick={() => setShowShortcuts(true)}
+          title="Keyboard Shortcuts"
+        >
+          ? Shortcuts
+        </button>
+      </div>
     </div>
+
+    {showShortcuts && <KeyboardShortcutsHelp onClose={() => setShowShortcuts(false)} />}
+    </>
   );
 }

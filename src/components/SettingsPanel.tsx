@@ -36,11 +36,21 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [defaultThickness, setDefaultThickness] = useState(3);
   const [historyRetentionDays, setHistoryRetentionDays] = useState(30);
   const [storageBudgetMb, setStorageBudgetMb] = useState(500);
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
 
   // Load credentials on mount
   useEffect(() => {
     loadCredentials();
   }, []);
+
+  // Apply theme to document
+  useEffect(() => {
+    if (theme === 'system') {
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+  }, [theme]);
 
   const loadCredentials = async () => {
     try {
@@ -362,6 +372,14 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               value={storageBudgetMb}
               onChange={(e) => setStorageBudgetMb(Number(e.target.value))}
             />
+          </div>
+          <div className="form-group">
+            <label>Theme</label>
+            <select value={theme} onChange={(e) => setTheme(e.target.value as 'light' | 'dark' | 'system')}>
+              <option value="system">System (Auto)</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
           </div>
         </section>
       </div>

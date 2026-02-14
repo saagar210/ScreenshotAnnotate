@@ -12,6 +12,7 @@ import { useAnnotations } from './hooks/useAnnotations';
 import { useExport } from './hooks/useExport';
 import { useHistory } from './hooks/useHistory';
 import { useOCR } from './hooks/useOCR';
+import { applyTemplate, type Template } from './lib/templates';
 import type { AppMode, AnnotationTool, CaptureResult, RedactAnnotation } from './types';
 import type { PiiRegion } from './hooks/useOCR';
 import './App.css';
@@ -187,6 +188,17 @@ function App() {
     handleCancel(); // Return to idle mode
   };
 
+  const handleApplyTemplate = (template: Template) => {
+    if (!currentImage) return;
+
+    // Apply template and get annotations
+    const templateAnnotations = applyTemplate(template, currentImage.width, currentImage.height);
+
+    // Clear existing annotations and add template annotations
+    clear();
+    templateAnnotations.forEach(annotation => addAnnotation(annotation));
+  };
+
   // Keyboard shortcuts for tool switching
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -290,6 +302,7 @@ function App() {
           onSave={handleSave}
           onCancel={handleCancel}
           onCheckPii={handleCheckPii}
+          onApplyTemplate={handleApplyTemplate}
           canUndo={canUndo}
           canRedo={canRedo}
           isOcrProcessing={isOcrProcessing}
