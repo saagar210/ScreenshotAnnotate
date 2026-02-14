@@ -40,6 +40,7 @@ function App() {
     undo,
     redo,
     clear,
+    setAnnotations,
     canUndo,
     canRedo,
   } = useAnnotations();
@@ -194,9 +195,8 @@ function App() {
     // Apply template and get annotations
     const templateAnnotations = applyTemplate(template, currentImage.width, currentImage.height);
 
-    // Clear existing annotations and add template annotations
-    clear();
-    templateAnnotations.forEach(annotation => addAnnotation(annotation));
+    // Replace all annotations with template annotations (single undo operation)
+    setAnnotations(templateAnnotations);
   };
 
   // Keyboard shortcuts for tool switching

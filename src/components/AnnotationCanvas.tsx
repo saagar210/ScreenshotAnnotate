@@ -216,7 +216,7 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasRef, AnnotationCanvas
         if (e.key === 'Enter') {
           handleTextSubmit();
         } else if (e.key === 'Escape') {
-          setTextInput({ ...textInput, visible: false });
+          setTextInput(prev => ({ ...prev, visible: false }));
           setTextValue('');
         }
         return;
@@ -244,7 +244,7 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasRef, AnnotationCanvas
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isDrawing, textInput, onUndo, onRedo, onSave, onCancel]);
+  }, [isDrawing, textInput, handleTextSubmit, onUndo, onRedo, onSave, onCancel]);
 
   return (
     <div className="annotation-canvas-container">
