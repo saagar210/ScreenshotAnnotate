@@ -46,6 +46,14 @@ npm run tauri dev
 npm run tauri build
 ```
 
+## Project Housekeeping
+
+Use this command to remove generated local artifacts and keep the repo lean:
+
+```bash
+npm run clean
+```
+
 ### First Run Permissions
 
 On first launch, macOS will prompt you to grant **Screen Recording** permission:
