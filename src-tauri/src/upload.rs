@@ -1,5 +1,6 @@
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use reqwest::multipart::{Form, Part};
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::Duration;
@@ -31,6 +32,78 @@ pub struct ValidationRequest {
 
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(15);
 
+fn validate_jira_base_url(base_url: &str) -> Result<String, String> {
+    let trimmed = base_url.trim();
+    let parsed = Url::parse(trimmed).map_err(|_| "Invalid Jira URL".to_string())?;
+
+    if parsed.scheme() != "https" {
+        return Err("Invalid Jira URL: HTTPS is required".to_string());
+    }
+
+    if parsed.host_str().is_none() {
+        return Err("Invalid Jira URL: missing host".to_string());
+    }
+
+    Ok(trimmed.trim_end_matches('/').to_string())
+}
+
+fn validate_jira_ticket_id(ticket_id: &str) -> Result<String, String> {
+    let trimmed = ticket_id.trim();
+    let mut parts = trimmed.splitn(2, '-');
+    let project = parts.next().unwrap_or_default();
+    let number = parts
+        .next()
+        .ok_or_else(|| "Invalid Jira ticket ID".to_string())?;
+
+    if project.len() < 2
+        || !project
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+    {
+        return Err("Invalid Jira ticket ID".to_string());
+    }
+
+    if number.is_empty() || !number.chars().all(|c| c.is_ascii_digit()) {
+        return Err("Invalid Jira ticket ID".to_string());
+    }
+
+    Ok(format!("{}-{}", project, number))
+}
+
+fn validate_zendesk_subdomain(subdomain: &str) -> Result<String, String> {
+    let normalized = subdomain.trim().to_lowercase();
+
+    if normalized.is_empty() || normalized.len() > 63 {
+        return Err("Invalid Zendesk subdomain".to_string());
+    }
+
+    if normalized.starts_with('-')
+        || normalized.ends_with('-')
+        || normalized.contains('.')
+        || normalized.contains('/')
+    {
+        return Err("Invalid Zendesk subdomain".to_string());
+    }
+
+    if !normalized
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    {
+        return Err("Invalid Zendesk subdomain".to_string());
+    }
+
+    Ok(normalized)
+}
+
+fn validate_zendesk_ticket_id(ticket_id: &str) -> Result<String, String> {
+    let trimmed = ticket_id.trim();
+    if trimmed.is_empty() || !trimmed.chars().all(|c| c.is_ascii_digit()) {
+        return Err("Invalid Zendesk ticket ID".to_string());
+    }
+
+    Ok(trimmed.to_string())
+}
+
 /// Upload a screenshot to Jira or Zendesk
 #[tauri::command]
 pub async fn upload_screenshot(request: UploadRequest) -> Result<UploadResult, String> {
@@ -52,8 +125,11 @@ pub async fn validate_credentials(request: ValidationRequest) -> Result<bool, St
 }
 
 async fn upload_to_jira(request: UploadRequest) -> Result<UploadResult, String> {
+    let base_url = validate_jira_base_url(&request.base_url)?;
+    let ticket_id = validate_jira_ticket_id(&request.ticket_id)?;
+
     let file_path = Path::new(&request.file_path);
-    if !file_path.exists() {
+    if !file_path.exists() || !file_path.is_file() {
         return Err("File not found".to_string());
     }
 
@@ -63,7 +139,8 @@ async fn upload_to_jira(request: UploadRequest) -> Result<UploadResult, String> 
         .unwrap_or("screenshot.png");
 
     // Read file bytes
-    let file_bytes = std::fs::read(&file_path).map_err(|e| format!("Failed to read file: {}", e))?;
+    let file_bytes =
+        std::fs::read(&file_path).map_err(|e| format!("Failed to read file: {}", e))?;
 
     // Create multipart form with file attachment
     let file_part = Part::bytes(file_bytes)
@@ -80,11 +157,7 @@ async fn upload_to_jira(request: UploadRequest) -> Result<UploadResult, String> 
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     // Upload to Jira
-    let url = format!(
-        "{}/rest/api/3/issue/{}/attachments",
-        request.base_url.trim_end_matches('/'),
-        request.ticket_id
-    );
+    let url = format!("{}/rest/api/3/issue/{}/attachments", base_url, ticket_id);
 
     let auth = BASE64.encode(format!("{}:{}", request.email, request.api_token));
 
@@ -121,11 +194,7 @@ async fn upload_to_jira(request: UploadRequest) -> Result<UploadResult, String> 
 
     // Add comment if provided
     if !request.comment.is_empty() {
-        let comment_url = format!(
-            "{}/rest/api/3/issue/{}/comment",
-            request.base_url.trim_end_matches('/'),
-            request.ticket_id
-        );
+        let comment_url = format!("{}/rest/api/3/issue/{}/comment", base_url, ticket_id);
 
         let comment_body = serde_json::json!({
             "body": {
@@ -145,7 +214,7 @@ async fn upload_to_jira(request: UploadRequest) -> Result<UploadResult, String> 
             }
         });
 
-        let _comment_response = client
+        let comment_response = client
             .post(&comment_url)
             .header("Authorization", format!("Basic {}", auth))
             .header("Content-Type", "application/json")
@@ -153,13 +222,25 @@ async fn upload_to_jira(request: UploadRequest) -> Result<UploadResult, String> 
             .send()
             .await
             .map_err(|e| format!("Failed to add comment: {}", e))?;
+
+        let comment_status = comment_response.status();
+        if comment_status == 401 || comment_status == 403 {
+            return Err("UPLOAD_AUTH_FAILED".to_string());
+        } else if comment_status == 404 {
+            return Err("TICKET_NOT_FOUND".to_string());
+        } else if !comment_status.is_success() {
+            let error_text = comment_response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(format!(
+                "Failed to add comment: {} - {}",
+                comment_status, error_text
+            ));
+        }
     }
 
-    let ticket_url = format!(
-        "{}/browse/{}",
-        request.base_url.trim_end_matches('/'),
-        request.ticket_id
-    );
+    let ticket_url = format!("{}/browse/{}", base_url, ticket_id);
 
     Ok(UploadResult {
         ticket_url: ticket_url.clone(),
@@ -168,8 +249,11 @@ async fn upload_to_jira(request: UploadRequest) -> Result<UploadResult, String> 
 }
 
 async fn upload_to_zendesk(request: UploadRequest) -> Result<UploadResult, String> {
+    let subdomain = validate_zendesk_subdomain(&request.base_url)?;
+    let ticket_id = validate_zendesk_ticket_id(&request.ticket_id)?;
+
     let file_path = Path::new(&request.file_path);
-    if !file_path.exists() {
+    if !file_path.exists() || !file_path.is_file() {
         return Err("File not found".to_string());
     }
 
@@ -179,7 +263,8 @@ async fn upload_to_zendesk(request: UploadRequest) -> Result<UploadResult, Strin
         .unwrap_or("screenshot.png");
 
     // Read file bytes
-    let file_bytes = std::fs::read(&file_path).map_err(|e| format!("Failed to read file: {}", e))?;
+    let file_bytes =
+        std::fs::read(&file_path).map_err(|e| format!("Failed to read file: {}", e))?;
 
     // Create HTTP client
     let client = reqwest::Client::builder()
@@ -190,7 +275,7 @@ async fn upload_to_zendesk(request: UploadRequest) -> Result<UploadResult, Strin
     // Step 1: Upload file to Zendesk uploads endpoint
     let upload_url = format!(
         "https://{}.zendesk.com/api/v2/uploads?filename={}",
-        request.base_url, filename
+        subdomain, filename
     );
 
     let auth = BASE64.encode(format!("{}/token:{}", request.email, request.api_token));
@@ -221,7 +306,10 @@ async fn upload_to_zendesk(request: UploadRequest) -> Result<UploadResult, Strin
             .text()
             .await
             .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(format!("File upload failed: {} - {}", upload_status, error_text));
+        return Err(format!(
+            "File upload failed: {} - {}",
+            upload_status, error_text
+        ));
     }
 
     #[derive(Deserialize)]
@@ -242,7 +330,7 @@ async fn upload_to_zendesk(request: UploadRequest) -> Result<UploadResult, Strin
     // Step 2: Add comment with attachment to ticket
     let comment_url = format!(
         "https://{}.zendesk.com/api/v2/tickets/{}/comments",
-        request.base_url, request.ticket_id
+        subdomain, ticket_id
     );
 
     let comment_text = if request.comment.is_empty() {
@@ -278,12 +366,15 @@ async fn upload_to_zendesk(request: UploadRequest) -> Result<UploadResult, Strin
             .text()
             .await
             .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(format!("Comment failed: {} - {}", comment_status, error_text));
+        return Err(format!(
+            "Comment failed: {} - {}",
+            comment_status, error_text
+        ));
     }
 
     let ticket_url = format!(
         "https://{}.zendesk.com/agent/tickets/{}",
-        request.base_url, request.ticket_id
+        subdomain, ticket_id
     );
 
     Ok(UploadResult {
@@ -293,15 +384,14 @@ async fn upload_to_zendesk(request: UploadRequest) -> Result<UploadResult, Strin
 }
 
 async fn validate_jira(request: ValidationRequest) -> Result<bool, String> {
+    let base_url = validate_jira_base_url(&request.base_url)?;
+
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
-    let url = format!(
-        "{}/rest/api/3/myself",
-        request.base_url.trim_end_matches('/')
-    );
+    let url = format!("{}/rest/api/3/myself", base_url);
 
     let auth = BASE64.encode(format!("{}:{}", request.email, request.api_token));
 
@@ -316,12 +406,14 @@ async fn validate_jira(request: ValidationRequest) -> Result<bool, String> {
 }
 
 async fn validate_zendesk(request: ValidationRequest) -> Result<bool, String> {
+    let subdomain = validate_zendesk_subdomain(&request.base_url)?;
+
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
-    let url = format!("https://{}.zendesk.com/api/v2/users/me", request.base_url);
+    let url = format!("https://{}.zendesk.com/api/v2/users/me", subdomain);
 
     let auth = BASE64.encode(format!("{}/token:{}", request.email, request.api_token));
 
@@ -333,4 +425,52 @@ async fn validate_zendesk(request: ValidationRequest) -> Result<bool, String> {
         .map_err(|e| format!("Connection failed: {}", e))?;
 
     Ok(response.status().is_success())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        validate_jira_base_url, validate_jira_ticket_id, validate_zendesk_subdomain,
+        validate_zendesk_ticket_id,
+    };
+
+    #[test]
+    fn jira_base_url_requires_https_and_host() {
+        assert!(validate_jira_base_url("https://example.atlassian.net").is_ok());
+        assert!(validate_jira_base_url("http://example.atlassian.net").is_err());
+        assert!(validate_jira_base_url("not a url").is_err());
+        assert!(validate_jira_base_url("https://").is_err());
+    }
+
+    #[test]
+    fn jira_ticket_id_validation_enforces_expected_format() {
+        assert_eq!(
+            validate_jira_ticket_id("PROJ-123").unwrap(),
+            "PROJ-123".to_string()
+        );
+        assert!(validate_jira_ticket_id("proj-123").is_err());
+        assert!(validate_jira_ticket_id("PROJ-").is_err());
+        assert!(validate_jira_ticket_id("PROJ123").is_err());
+    }
+
+    #[test]
+    fn zendesk_subdomain_validation_rejects_unsafe_values() {
+        assert_eq!(
+            validate_zendesk_subdomain("my-company").unwrap(),
+            "my-company".to_string()
+        );
+        assert!(validate_zendesk_subdomain("my.company").is_err());
+        assert!(validate_zendesk_subdomain("../evil").is_err());
+        assert!(validate_zendesk_subdomain("-bad").is_err());
+    }
+
+    #[test]
+    fn zendesk_ticket_id_requires_digits() {
+        assert_eq!(
+            validate_zendesk_ticket_id("123456").unwrap(),
+            "123456".to_string()
+        );
+        assert!(validate_zendesk_ticket_id("ABC-123").is_err());
+        assert!(validate_zendesk_ticket_id("").is_err());
+    }
 }

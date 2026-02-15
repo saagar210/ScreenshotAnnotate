@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { convertFileSrc } from '@tauri-apps/api/core';
+import { normalizeRectBounds } from '../lib/geometry';
 import type {
   Annotation,
   AnnotationTool,
@@ -54,270 +55,297 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasRef, AnnotationCanvas
     useImperativeHandle(ref, () => ({
       getSvgElement: () => svgRef.current,
     }));
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [currentDraft, setCurrentDraft] = useState<Partial<Annotation> | null>(null);
-  const [textInput, setTextInput] = useState<{ position: Point; visible: boolean }>({
-    position: { x: 0, y: 0 },
-    visible: false,
-  });
-  const [textValue, setTextValue] = useState('');
+    const [isDrawing, setIsDrawing] = useState(false);
+    const [currentDraft, setCurrentDraft] = useState<Partial<Annotation> | null>(null);
+    const [textInput, setTextInput] = useState<{ position: Point; visible: boolean }>({
+      position: { x: 0, y: 0 },
+      visible: false,
+    });
+    const [textValue, setTextValue] = useState('');
 
-  const imageUrl = convertFileSrc(imagePath);
+    const imageUrl = convertFileSrc(imagePath);
 
-  // Get SVG point from mouse event
-  const getSvgPoint = useCallback((event: React.PointerEvent<SVGSVGElement>): Point => {
-    if (!svgRef.current) return { x: 0, y: 0 };
+    // Get SVG point from mouse event
+    const getSvgPoint = useCallback((event: React.PointerEvent<SVGSVGElement>): Point => {
+      if (!svgRef.current) return { x: 0, y: 0 };
 
-    const svg = svgRef.current;
-    const rect = svg.getBoundingClientRect();
+      const svg = svgRef.current;
+      const rect = svg.getBoundingClientRect();
 
-    // Convert screen coordinates to SVG coordinates
-    const scaleX = imageWidth / rect.width;
-    const scaleY = imageHeight / rect.height;
+      // Convert screen coordinates to SVG coordinates
+      const scaleX = imageWidth / rect.width;
+      const scaleY = imageHeight / rect.height;
 
-    return {
-      x: (event.clientX - rect.left) * scaleX,
-      y: (event.clientY - rect.top) * scaleY,
-    };
-  }, [imageWidth, imageHeight]);
+      return {
+        x: (event.clientX - rect.left) * scaleX,
+        y: (event.clientY - rect.top) * scaleY,
+      };
+    }, [imageWidth, imageHeight]);
 
-  const handlePointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
-    if (currentTool === 'text') {
-      // Text tool: show input at click position
-      const point = getSvgPoint(event);
-      setTextInput({ position: point, visible: true });
-      setTextValue('');
-      return;
-    }
-
-    setIsDrawing(true);
-    const point = getSvgPoint(event);
-
-    switch (currentTool) {
-      case 'arrow':
-        setCurrentDraft({
-          type: 'arrow',
-          start: point,
-          end: point,
-          color: currentColor,
-          thickness: currentThickness,
-        });
-        break;
-      case 'rectangle':
-        setCurrentDraft({
-          type: 'rectangle',
-          origin: point,
-          width: 0,
-          height: 0,
-          color: currentColor,
-          thickness: currentThickness,
-        });
-        break;
-      case 'freehand':
-        setCurrentDraft({
-          type: 'freehand',
-          points: [point],
-          color: currentColor,
-          thickness: currentThickness,
-        });
-        break;
-      case 'redact':
-        setCurrentDraft({
-          type: 'redact',
-          origin: point,
-          width: 0,
-          height: 0,
-          style: 'blur',
-          reason: 'manual',
-          color: currentColor,
-          thickness: 0,
-        });
-        break;
-    }
-  };
-
-  const handlePointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
-    if (!isDrawing || !currentDraft) return;
-
-    const point = getSvgPoint(event);
-
-    switch (currentDraft.type) {
-      case 'arrow':
-        setCurrentDraft({ ...currentDraft, end: point });
-        break;
-      case 'rectangle':
-      case 'redact': {
-        const origin = (currentDraft as Partial<RectAnnotation | RedactAnnotation>).origin!;
-        setCurrentDraft({
-          ...currentDraft,
-          width: point.x - origin.x,
-          height: point.y - origin.y,
-        });
-        break;
-      }
-      case 'freehand': {
-        const points = (currentDraft as Partial<FreehandAnnotation>).points || [];
-        // Throttle: only add point every 5ms (roughly)
-        const lastPoint = points[points.length - 1];
-        const distance = Math.sqrt(
-          Math.pow(point.x - lastPoint.x, 2) + Math.pow(point.y - lastPoint.y, 2)
-        );
-        if (distance > 2) { // Only add point if moved at least 2px
-          setCurrentDraft({ ...currentDraft, points: [...points, point] });
-        }
-        break;
-      }
-    }
-  };
-
-  const handlePointerUp = () => {
-    if (!isDrawing || !currentDraft) return;
-
-    setIsDrawing(false);
-
-    // Finalize annotation
-    const annotation: Annotation = {
-      ...currentDraft,
-      id: crypto.randomUUID(),
-      createdAt: Date.now(),
-    } as Annotation;
-
-    onAddAnnotation(annotation);
-    setCurrentDraft(null);
-  };
-
-  const handleTextSubmit = () => {
-    if (!textValue.trim()) {
-      setTextInput({ ...textInput, visible: false });
-      return;
-    }
-
-    const annotation: TextAnnotation = {
-      id: crypto.randomUUID(),
-      type: 'text',
-      position: textInput.position,
-      text: textValue,
-      fontSize: 24,
-      color: currentColor,
-      thickness: currentThickness,
-      createdAt: Date.now(),
-    };
-
-    onAddAnnotation(annotation);
-    setTextInput({ ...textInput, visible: false });
-    setTextValue('');
-  };
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't capture shortcuts when typing in text input
-      if (textInput.visible && e.target instanceof HTMLInputElement) {
-        if (e.key === 'Enter') {
-          handleTextSubmit();
-        } else if (e.key === 'Escape') {
-          setTextInput(prev => ({ ...prev, visible: false }));
-          setTextValue('');
-        }
+    const handlePointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
+      if (currentTool === 'text') {
+        // Text tool: show input at click position
+        const point = getSvgPoint(event);
+        setTextInput({ position: point, visible: true });
+        setTextValue('');
         return;
       }
 
-      if (e.key === 'Escape') {
-        if (isDrawing) {
-          setIsDrawing(false);
-          setCurrentDraft(null);
-        } else {
-          onCancel();
-        }
-      } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        if (e.shiftKey) {
-          onRedo();
-        } else {
-          onUndo();
-        }
-      } else if (e.key === 's' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        onSave();
+      setIsDrawing(true);
+      const point = getSvgPoint(event);
+
+      switch (currentTool) {
+        case 'arrow':
+          setCurrentDraft({
+            type: 'arrow',
+            start: point,
+            end: point,
+            color: currentColor,
+            thickness: currentThickness,
+          });
+          break;
+        case 'rectangle':
+          setCurrentDraft({
+            type: 'rectangle',
+            origin: point,
+            width: 0,
+            height: 0,
+            color: currentColor,
+            thickness: currentThickness,
+          });
+          break;
+        case 'freehand':
+          setCurrentDraft({
+            type: 'freehand',
+            points: [point],
+            color: currentColor,
+            thickness: currentThickness,
+          });
+          break;
+        case 'redact':
+          setCurrentDraft({
+            type: 'redact',
+            origin: point,
+            width: 0,
+            height: 0,
+            style: 'blur',
+            reason: 'manual',
+            color: currentColor,
+            thickness: 0,
+          });
+          break;
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isDrawing, textInput, handleTextSubmit, onUndo, onRedo, onSave, onCancel]);
+    const handlePointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
+      if (!isDrawing || !currentDraft) return;
 
-  return (
-    <div className="annotation-canvas-container">
-      <div className="canvas-wrapper">
-        <img
-          src={imageUrl}
-          alt="Screenshot"
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'contain',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-          }}
-        />
-        <svg
-          ref={svgRef}
-          viewBox={`0 0 ${imageWidth} ${imageHeight}`}
-          style={{
-            width: '100%',
-            height: '100%',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-          }}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-        >
-          {/* SVG Filters for redaction effects */}
-          <defs>
-            <filter id="blur-filter">
-              <feGaussianBlur in="SourceGraphic" stdDeviation="10" />
-            </filter>
-          </defs>
+      const point = getSvgPoint(event);
 
-          {/* Render finalized annotations */}
-          {annotations.map(annotation => (
-            <AnnotationRenderer key={annotation.id} annotation={annotation} />
-          ))}
+      switch (currentDraft.type) {
+        case 'arrow':
+          setCurrentDraft({ ...currentDraft, end: point });
+          break;
+        case 'rectangle':
+        case 'redact': {
+          const origin = (currentDraft as Partial<RectAnnotation | RedactAnnotation>).origin!;
+          setCurrentDraft({
+            ...currentDraft,
+            width: point.x - origin.x,
+            height: point.y - origin.y,
+          });
+          break;
+        }
+        case 'freehand': {
+          const points = (currentDraft as Partial<FreehandAnnotation>).points || [];
+          const lastPoint = points[points.length - 1];
+          const distance = Math.sqrt(
+            Math.pow(point.x - lastPoint.x, 2) + Math.pow(point.y - lastPoint.y, 2)
+          );
+          if (distance > 2) {
+            setCurrentDraft({ ...currentDraft, points: [...points, point] });
+          }
+          break;
+        }
+      }
+    };
 
-          {/* Render current draft */}
-          {currentDraft && (
-            <AnnotationRenderer annotation={currentDraft as Annotation} isDraft />
-          )}
-        </svg>
+    const handlePointerUp = () => {
+      if (!isDrawing || !currentDraft) return;
 
-        {/* Text input overlay */}
-        {textInput.visible && (
-          <input
-            type="text"
-            value={textValue}
-            onChange={(e) => setTextValue(e.target.value)}
-            onBlur={handleTextSubmit}
-            autoFocus
+      setIsDrawing(false);
+
+      let finalizedDraft = currentDraft;
+      if (currentDraft.type === 'rectangle' || currentDraft.type === 'redact') {
+        const rectDraft = currentDraft as Partial<RectAnnotation | RedactAnnotation>;
+        if (!rectDraft.origin) {
+          setCurrentDraft(null);
+          return;
+        }
+
+        const normalized = normalizeRectBounds(
+          rectDraft.origin,
+          rectDraft.width ?? 0,
+          rectDraft.height ?? 0,
+        );
+
+        if (normalized.width === 0 || normalized.height === 0) {
+          setCurrentDraft(null);
+          return;
+        }
+
+        finalizedDraft = {
+          ...currentDraft,
+          origin: normalized.origin,
+          width: normalized.width,
+          height: normalized.height,
+        };
+      }
+
+      // Finalize annotation
+      const annotation: Annotation = {
+        ...finalizedDraft,
+        id: crypto.randomUUID(),
+        createdAt: Date.now(),
+      } as Annotation;
+
+      onAddAnnotation(annotation);
+      setCurrentDraft(null);
+    };
+
+    const handleTextSubmit = () => {
+      if (!textValue.trim()) {
+        setTextInput({ ...textInput, visible: false });
+        return;
+      }
+
+      const annotation: TextAnnotation = {
+        id: crypto.randomUUID(),
+        type: 'text',
+        position: textInput.position,
+        text: textValue,
+        fontSize: 24,
+        color: currentColor,
+        thickness: currentThickness,
+        createdAt: Date.now(),
+      };
+
+      onAddAnnotation(annotation);
+      setTextInput({ ...textInput, visible: false });
+      setTextValue('');
+    };
+
+    // Keyboard shortcuts
+    useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        // Don't capture shortcuts when typing in text input
+        if (textInput.visible && e.target instanceof HTMLInputElement) {
+          if (e.key === 'Enter') {
+            handleTextSubmit();
+          } else if (e.key === 'Escape') {
+            setTextInput(prev => ({ ...prev, visible: false }));
+            setTextValue('');
+          }
+          return;
+        }
+
+        if (e.key === 'Escape') {
+          if (isDrawing) {
+            setIsDrawing(false);
+            setCurrentDraft(null);
+          } else {
+            onCancel();
+          }
+        } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          if (e.shiftKey) {
+            onRedo();
+          } else {
+            onUndo();
+          }
+        } else if (e.key === 's' && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          onSave();
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isDrawing, textInput, handleTextSubmit, onUndo, onRedo, onSave, onCancel]);
+
+    return (
+      <div className="annotation-canvas-container">
+        <div className="canvas-wrapper">
+          <img
+            src={imageUrl}
+            alt="Screenshot"
             style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
               position: 'absolute',
-              left: `${(textInput.position.x / imageWidth) * 100}%`,
-              top: `${(textInput.position.y / imageHeight) * 100}%`,
-              fontSize: '16px',
-              padding: '4px 8px',
-              border: `2px solid ${currentColor}`,
-              borderRadius: '4px',
-              backgroundColor: 'white',
-              zIndex: 1000,
+              top: 0,
+              left: 0,
             }}
           />
-        )}
+          <svg
+            ref={svgRef}
+            viewBox={`0 0 ${imageWidth} ${imageHeight}`}
+            style={{
+              width: '100%',
+              height: '100%',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+            }}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+          >
+            {/* SVG Filters for redaction effects */}
+            <defs>
+              <filter id="blur-filter">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="10" />
+              </filter>
+            </defs>
+
+            {/* Render finalized annotations */}
+            {annotations.map(annotation => (
+              <AnnotationRenderer key={annotation.id} annotation={annotation} />
+            ))}
+
+            {/* Render current draft */}
+            {currentDraft && (
+              <AnnotationRenderer annotation={currentDraft as Annotation} isDraft />
+            )}
+          </svg>
+
+          {/* Text input overlay */}
+          {textInput.visible && (
+            <input
+              type="text"
+              value={textValue}
+              onChange={(e) => setTextValue(e.target.value)}
+              onBlur={handleTextSubmit}
+              autoFocus
+              style={{
+                position: 'absolute',
+                left: `${(textInput.position.x / imageWidth) * 100}%`,
+                top: `${(textInput.position.y / imageHeight) * 100}%`,
+                fontSize: '16px',
+                padding: '4px 8px',
+                border: `2px solid ${currentColor}`,
+                borderRadius: '4px',
+                backgroundColor: 'white',
+                zIndex: 1000,
+              }}
+            />
+          )}
+        </div>
       </div>
-    </div>
-  );
-});
+    );
+  },
+);
 
 function AnnotationRenderer({
   annotation,
@@ -368,12 +396,13 @@ function AnnotationRenderer({
 
     case 'rectangle': {
       const rect = annotation as RectAnnotation;
+      const normalized = normalizeRectBounds(rect.origin, rect.width, rect.height);
       return (
         <rect
-          x={rect.origin.x}
-          y={rect.origin.y}
-          width={rect.width}
-          height={rect.height}
+          x={normalized.origin.x}
+          y={normalized.origin.y}
+          width={normalized.width}
+          height={normalized.height}
           stroke={rect.color}
           strokeWidth={rect.thickness}
           fill="none"
@@ -422,15 +451,16 @@ function AnnotationRenderer({
 
     case 'redact': {
       const redact = annotation as RedactAnnotation;
+      const normalized = normalizeRectBounds(redact.origin, redact.width, redact.height);
 
       switch (redact.style) {
         case 'blur':
           return (
             <rect
-              x={redact.origin.x}
-              y={redact.origin.y}
-              width={redact.width}
-              height={redact.height}
+              x={normalized.origin.x}
+              y={normalized.origin.y}
+              width={normalized.width}
+              height={normalized.height}
               fill="white"
               filter="url(#blur-filter)"
               opacity={opacity}
@@ -444,8 +474,8 @@ function AnnotationRenderer({
               <defs>
                 <pattern
                   id={`pixelate-${redact.id}`}
-                  x={redact.origin.x}
-                  y={redact.origin.y}
+                  x={normalized.origin.x}
+                  y={normalized.origin.y}
                   width="8"
                   height="8"
                   patternUnits="userSpaceOnUse"
@@ -454,10 +484,10 @@ function AnnotationRenderer({
                 </pattern>
               </defs>
               <rect
-                x={redact.origin.x}
-                y={redact.origin.y}
-                width={redact.width}
-                height={redact.height}
+                x={normalized.origin.x}
+                y={normalized.origin.y}
+                width={normalized.width}
+                height={normalized.height}
                 fill={`url(#pixelate-${redact.id})`}
               />
             </g>
@@ -466,10 +496,10 @@ function AnnotationRenderer({
         case 'blackbox':
           return (
             <rect
-              x={redact.origin.x}
-              y={redact.origin.y}
-              width={redact.width}
-              height={redact.height}
+              x={normalized.origin.x}
+              y={normalized.origin.y}
+              width={normalized.width}
+              height={normalized.height}
               fill="#000000"
               opacity={opacity}
             />

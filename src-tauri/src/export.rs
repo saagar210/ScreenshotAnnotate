@@ -13,8 +13,8 @@ pub async fn export_annotated(
     annotation_png_base64: String,
 ) -> Result<ExportResult, String> {
     // Load original screenshot
-    let original_img = image::open(&original_path)
-        .map_err(|e| format!("Failed to load original image: {}", e))?;
+    let original_img =
+        image::open(&original_path).map_err(|e| format!("Failed to load original image: {}", e))?;
 
     // Decode annotation layer from base64
     let annotation_data = base64_decode(&annotation_png_base64)

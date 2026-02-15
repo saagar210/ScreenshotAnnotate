@@ -43,16 +43,6 @@
     }
   },
   "plugins": {
-    "shell": {
-      "scope": [
-        {
-          "name": "screencapture",
-          "cmd": "screencapture",
-          "args": ["-i", "$TEMP_PATH"],
-          "sidecar": false
-        }
-      ]
-    },
     "globalShortcut": {
       "shortcuts": ["CmdOrCtrl+Shift+5"]
     }

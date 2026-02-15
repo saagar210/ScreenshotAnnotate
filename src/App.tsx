@@ -12,6 +12,7 @@ import { useAnnotations } from './hooks/useAnnotations';
 import { useExport } from './hooks/useExport';
 import { useHistory } from './hooks/useHistory';
 import { useOCR } from './hooks/useOCR';
+import { loadImageFromUrl } from './lib/image-loader';
 import { applyTemplate, type Template } from './lib/templates';
 import type { AppMode, AnnotationTool, CaptureResult, RedactAnnotation } from './types';
 import type { PiiRegion } from './hooks/useOCR';
@@ -127,38 +128,40 @@ function App() {
   const handleCheckPii = async () => {
     if (!currentImage) return;
 
-    // Convert file path to data URL for OCR
-    const imageUrl = convertFileSrc(currentImage.tempPath);
+    try {
+      // Convert file path to data URL for OCR
+      const imageUrl = convertFileSrc(currentImage.tempPath);
 
-    // Load image as data URL
-    const img = new Image();
-    img.src = imageUrl;
-    await new Promise((resolve) => {
-      img.onload = resolve;
-    });
+      // Load image as data URL
+      const img = await loadImageFromUrl(imageUrl);
 
-    const canvas = document.createElement('canvas');
-    canvas.width = currentImage.width;
-    canvas.height = currentImage.height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      alert('Failed to create canvas context');
-      return;
-    }
-
-    ctx.drawImage(img, 0, 0);
-    const dataUrl = canvas.toDataURL('image/png');
-
-    // Run OCR
-    const result = await detectPii(dataUrl);
-    if (result) {
-      if (result.timedOut) {
-        alert('OCR timed out. You can still add manual redactions.');
+      const canvas = document.createElement('canvas');
+      canvas.width = currentImage.width;
+      canvas.height = currentImage.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        alert('Failed to create canvas context');
+        return;
       }
-      setDetectedPiiRegions(result.regions);
-      setShowRedactionPreview(true);
-    } else {
-      alert('OCR failed. You can still add manual redactions.');
+
+      ctx.drawImage(img, 0, 0);
+      const dataUrl = canvas.toDataURL('image/png');
+
+      // Run OCR
+      const result = await detectPii(dataUrl);
+      if (result) {
+        if (result.timedOut) {
+          alert('OCR timed out. You can still add manual redactions.');
+        }
+        setDetectedPiiRegions(result.regions);
+        setShowRedactionPreview(true);
+      } else {
+        alert('OCR failed. You can still add manual redactions.');
+        setShowRedactionPreview(true);
+      }
+    } catch (err) {
+      console.error('PII check failed:', err);
+      alert('Failed to process image for OCR. You can still add manual redactions.');
       setShowRedactionPreview(true);
     }
   };

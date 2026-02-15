@@ -6,9 +6,6 @@
   "permissions": [
     "core:default",
     "core:event:default",
-    "opener:default",
-    "shell:default",
-    "shell:allow-execute",
     "global-shortcut:default",
     "clipboard-manager:default"
   ]

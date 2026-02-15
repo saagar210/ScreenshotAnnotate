@@ -10,8 +10,6 @@ use tauri_plugin_global_shortcut::GlobalShortcutExt;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
@@ -19,10 +17,13 @@ pub fn run() {
             // This will emit an event when triggered
             let handle = app.handle().clone();
 
-            app.global_shortcut().on_shortcut("CmdOrCtrl+Shift+5", move |_app, _shortcut, _event| {
-                // Emit event to frontend to trigger capture
-                let _ = handle.emit("trigger-capture", ());
-            })?;
+            app.global_shortcut().on_shortcut(
+                "CmdOrCtrl+Shift+5",
+                move |_app, _shortcut, _event| {
+                    // Emit event to frontend to trigger capture
+                    let _ = handle.emit("trigger-capture", ());
+                },
+            )?;
 
             app.global_shortcut().register("CmdOrCtrl+Shift+5")?;
 

@@ -24,8 +24,11 @@ dist-ssr
 *.sw?
 
 # Rust
-src-tauri/target
+src-tauri/target/
 Cargo.lock
 
 # Tauri
 src-tauri/WixTools
+
+# Local audit workspace
+.codex_audit/
