@@ -1,8 +1,16 @@
+#!/usr/bin/env node
 const fs = require('fs');
 const path = require('path');
 
 const root = process.cwd();
-const removableDirs = ['node_modules', 'dist', '.codex_audit', 'src-tauri/target'];
+const removableDirs = [
+  'node_modules',
+  'dist',
+  '.vite',
+  '.codex_audit',
+  'coverage',
+  'src-tauri/target',
+];
 
 for (const dir of removableDirs) {
   const fullPath = path.join(root, dir);
@@ -15,6 +23,10 @@ function removeDsStore(dir) {
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
+      if (entry.name === '.git') {
+        continue;
+      }
+
       removeDsStore(fullPath);
       continue;
     }

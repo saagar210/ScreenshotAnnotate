@@ -4,14 +4,17 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node ./scripts/vite-dev.cjs",
     "build": "tsc && vite build",
     "test": "vitest run",
     "clean": "node ./scripts/clean.cjs",
     "audit:rust": "./scripts/cargo_audit.sh",
     "audit:deps": "npm audit --audit-level=high && npm run audit:rust",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:dev:lean": "node ./scripts/tauri-dev-lean.cjs",
+    "clean:heavy": "node ./scripts/clean-heavy.cjs",
+    "clean:full": "node ./scripts/clean.cjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

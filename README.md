@@ -39,8 +39,11 @@ A macOS desktop screenshot annotation tool built with Tauri 2 + React 19 that co
 # Install dependencies
 npm install
 
-# Run in development mode
+# Run in normal development mode
 npm run tauri dev
+
+# Run in lean development mode (temp build caches + auto-clean on exit)
+npm run tauri:dev:lean
 
 # Build for production
 npm run tauri build
@@ -48,11 +51,41 @@ npm run tauri build
 
 ## Project Housekeeping
 
-Use this command to remove generated local artifacts and keep the repo lean:
+Use these cleanup commands to reclaim disk space:
 
 ```bash
-npm run clean
+# Remove heavy build artifacts only (keeps dependencies)
+npm run clean:heavy
+
+# Remove all reproducible local caches/artifacts (including node_modules)
+npm run clean:full
 ```
+
+`npm run clean` remains available as an alias for `npm run clean:full`.
+
+## Normal Dev vs Lean Dev
+
+### Normal dev
+
+```bash
+npm run tauri dev
+```
+
+- Fastest restarts after the first run
+- Writes build artifacts to the repo workspace (for example `src-tauri/target`, Vite cache)
+- Best when you are actively iterating and disk space is not tight
+
+### Lean dev
+
+```bash
+npm run tauri:dev:lean
+```
+
+- Starts the app with temporary cache locations:
+  - Rust build output goes to a temporary `CARGO_TARGET_DIR`
+  - Vite cache goes to a temporary `VITE_CACHE_DIR`
+- Automatically deletes those temporary caches when the dev session exits
+- Uses less persistent disk in the repo, but startup may be slower because caches are rebuilt each session
 
 ### First Run Permissions
 
